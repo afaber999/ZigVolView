@@ -1,11 +1,10 @@
 #version 300 es
 
-precision mediump float;
+precision highp float;
+uniform vec4 color;
 
-uniform vec4 my_color;
-
-out vec4 color;
+out vec4 shader_color;
 
 void main() {
-	color = vec4( 0.7f, 0.4f, 0.3f, 1.0f);
+	shader_color = color;
 }

@@ -27,7 +27,7 @@ pub fn onInit() Self {
     const program = gl.glLinkShaderProgram(vert_shader, frag_shader);
     gl.glUseProgram(program);
     //const mvp_loc = gl.glGetUniformLocation(program, "mvp", 3);
-    const color_loc = gl.glGetUniformLocation(program, "my_color", 5);
+    const color_loc = gl.glGetUniformLocation(program, "color", 5);
 
     // var buf: c_uint = undefined;
     // gl.glGenBuffers(1, &buf);
@@ -65,11 +65,16 @@ pub fn onAnimationFrame(self: *Self) void {
     // gl.glEnableVertexAttribArray(0);
     // gl.glVertexAttribPointer(0, 3, gl.GL_FLOAT, gl.GL_FALSE, 0, null);
 
-    // gl.glUniform4f(self.color_loc, 0.97, 0.64, 0.11, 1);
     // gl.glDrawArrays(gl.GL_TRIANGLES, 0, 120);
     // gl.glUniform4f(self.color_loc, 0.98, 0.82, 0.6, 1);
     // gl.glDrawArrays(gl.GL_TRIANGLES, 120, 66);
     // gl.glUniform4f(self.color_loc, 0.6, 0.35, 0.02, 1);
+
+    //	color = vec4( 0.7f, 0.4f, 0.3f, 1.0f);
+    const f: f32 = @floatFromInt(self.frame);
+    const red: f32 = 1.0 - f / 100.0;
+    gl.glUniform4f(self.color_loc, red, 0.4, 0.3, 1.0);
+
     gl.glDrawArrays(gl.GL_TRIANGLE_STRIP, 0, 4);
 
     self.frame += 1;
