@@ -4,31 +4,61 @@ const Vec3 = za.Vec3;
 const Mat4 = za.Mat4;
 const gl = @import("webgl.zig");
 const keys = @import("keys.zig");
+const glue = @import("wasmglue.zig");
+const LogoRenderer = @import("LogoRenderer.zig");
+const QuadRenderer = @import("QuadRenderer.zig");
+const print = glue.print;
 
 var video_width: f32 = 1280;
 var video_height: f32 = 720;
 var video_scale: f32 = 1;
 
-var mvp_loc: c_int = undefined;
-var color_loc: c_int = undefined;
+var logo_renderer: LogoRenderer = undefined;
+var quad_renderer: QuadRenderer = undefined;
+
+const c = @cImport({
+    //@cDefine("STBI_NO_STDIO", {});
+    //@cDefine("STBI_ONLY_JPEG", {});
+    @cInclude("stb_image_tmp.h");
+});
+
+var logo_data: std.ArrayList(u8) = std.ArrayList(u8).init(std.heap.wasm_allocator);
+pub export var global_chunk: [16384]u8 = undefined;
+
+pub export fn pushDataSize() usize {
+    return global_chunk.len;
+}
+
+pub export fn pushImage(ptr: [*]const u8, len: usize) void {
+    print("PUSH IMAGE: {}", .{len});
+
+    // Decode the JPEG data using stb_image
+    var width: c_int = 0;
+    var height: c_int = 0;
+    var channels: c_int = 0;
+    const decodedData = c.stbi_load_from_memory(ptr, @intCast(len), &width, &height, &channels, 4);
+
+    _ = decodedData;
+
+    print("WIDTH: {} HEIGHT: {} CHANNELS: {}", .{ width, height, channels });
+
+    // if (decodedData == null) {
+    //     //std.debug.print("Failed to decode JPEG image\n", .{});
+    //     return;
+    // }
+}
+
+pub export fn pushData(len: usize) void {
+    logo_data.appendSlice(global_chunk[0..len]) catch unreachable;
+    print("LOGO SIZE: {}", .{logo_data.items.len});
+}
 
 export fn onInit() void {
+    print("MAIN ZIG: ONINT", .{});
+    const logo: []const f32 = @alignCast(std.mem.bytesAsSlice(f32, logo_data.items));
     gl.glEnable(gl.GL_DEPTH_TEST);
-
-    const vert_src = @embedFile("shaders/transform.vert");
-    const frag_src = @embedFile("shaders/color.frag");
-    const vert_shader = gl.glInitShader(vert_src, vert_src.len, gl.GL_VERTEX_SHADER);
-    const frag_shader = gl.glInitShader(frag_src, frag_src.len, gl.GL_FRAGMENT_SHADER);
-    const program = gl.glLinkShaderProgram(vert_shader, frag_shader);
-    gl.glUseProgram(program);
-    mvp_loc = gl.glGetUniformLocation(program, "mvp", 3);
-    color_loc = gl.glGetUniformLocation(program, "color", 5);
-
-    var buf: c_uint = undefined;
-    gl.glGenBuffers(1, &buf);
-    gl.glBindBuffer(gl.GL_ARRAY_BUFFER, buf);
-    const vertex_data = @import("zig-mark.zig").positions;
-    gl.glBufferData(gl.GL_ARRAY_BUFFER, vertex_data.len * @sizeOf(f32), &vertex_data, gl.GL_STATIC_DRAW);
+    logo_renderer = LogoRenderer.onInit(logo);
+    quad_renderer = QuadRenderer.onInit();
 }
 
 export fn onResize(w: c_uint, h: c_uint, s: f32) void {
@@ -38,39 +68,14 @@ export fn onResize(w: c_uint, h: c_uint, s: f32) void {
     gl.glViewport(0, 0, @intFromFloat(s * video_width), @intFromFloat(s * video_height));
 }
 
-var cam_x: f32 = 0;
-var cam_y: f32 = 0;
 export fn onKeyDown(key: c_uint) void {
-    switch (key) {
-        keys.KEY_LEFT => cam_x -= 0.1,
-        keys.KEY_RIGHT => cam_x += 0.1,
-        keys.KEY_DOWN => cam_y -= 0.1,
-        keys.KEY_UP => cam_y += 0.1,
-        else => {},
-    }
+    logo_renderer.onKeyDown(key);
+    quad_renderer.onKeyDown(key);
 }
 
-var frame: usize = 0;
 export fn onAnimationFrame() void {
     gl.glClearColor(0.5, 0.5, 0.5, 1);
     gl.glClear(gl.GL_COLOR_BUFFER_BIT | gl.GL_DEPTH_BUFFER_BIT);
-
-    const projection = za.perspective(45.0, video_width / video_height, 0.1, 10.0);
-    const view = Mat4.fromTranslate(Vec3.new(cam_x, cam_y, -4));
-    const model = Mat4.fromRotation(@floatFromInt(2 * frame), Vec3.up());
-
-    const mvp = projection.mul(view.mul(model));
-    gl.glUniformMatrix4fv(mvp_loc, 1, gl.GL_FALSE, &mvp.data[0]);
-
-    gl.glEnableVertexAttribArray(0);
-    gl.glVertexAttribPointer(0, 3, gl.GL_FLOAT, gl.GL_FALSE, 0, null);
-
-    gl.glUniform4f(color_loc, 0.97, 0.64, 0.11, 1);
-    gl.glDrawArrays(gl.GL_TRIANGLES, 0, 120);
-    gl.glUniform4f(color_loc, 0.98, 0.82, 0.6, 1);
-    gl.glDrawArrays(gl.GL_TRIANGLES, 120, 66);
-    gl.glUniform4f(color_loc, 0.6, 0.35, 0.02, 1);
-    gl.glDrawArrays(gl.GL_TRIANGLES, 186, 90);
-
-    frame += 1;
+    logo_renderer.onAnimationFrame(video_width, video_height);
+    quad_renderer.onAnimationFrame();
 }
